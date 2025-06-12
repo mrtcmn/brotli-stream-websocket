@@ -1,0 +1,36 @@
+{
+  "name": "brotli-stream-websocket",
+  "version": "1.0.0",
+  "description": "WebSocket streaming compression comparison: Brotli vs Gzip vs No Compression using Bun and Elysia",
+  "main": "index.ts",
+  "type": "module",
+  "scripts": {
+    "dev": "bun run --watch index.ts",
+    "start": "bun run index.ts",
+    "build": "bun build index.ts --outdir ./dist --target bun",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "bun",
+    "elysia",
+    "websocket",
+    "brotli",
+    "gzip",
+    "compression",
+    "streaming",
+    "real-time"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "elysia": "^1.3.4",
+    "zstd-codec": "^0.1.5"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
+  }
+}
