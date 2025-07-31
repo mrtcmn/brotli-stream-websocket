@@ -17,7 +17,7 @@ function compressWithGzip(data: unknown): { compressed: string; originalSize: nu
   const jsonString = JSON.stringify(data);
   const originalBuffer = Buffer.from(jsonString);
   const compressedBuffer = zlib.gzipSync(originalBuffer);
-  
+
   return {
     compressed: compressedBuffer.toString("base64"),
     originalSize: originalBuffer.length,
@@ -29,7 +29,7 @@ function compressWithBrotli(data: unknown): { compressed: string; originalSize: 
   try {
     const jsonString = JSON.stringify(data);
     const originalBuffer = Buffer.from(jsonString);
-    
+
     // Optimized Brotli parameters for streaming (based on performance testing)
     // Quality 6: Fast compression with excellent ratio (3.86ms, 7.64x compression)
     // Mode 0: Generic mode works best for mixed financial data
@@ -38,12 +38,12 @@ function compressWithBrotli(data: unknown): { compressed: string; originalSize: 
     const compressedBuffer = zlib.brotliCompressSync(originalBuffer, {
       params: {
         [zlib.constants.BROTLI_PARAM_MODE]: 0,     // generic mode (best for mixed data)
-        [zlib.constants.BROTLI_PARAM_QUALITY]: 6,  // optimized for streaming (fast + good compression)
+        [zlib.constants.BROTLI_PARAM_QUALITY]: 10,  // optimized for streaming (fast + good compression)
         [zlib.constants.BROTLI_PARAM_LGWIN]: 15,   // window size optimization
         [zlib.constants.BROTLI_PARAM_LGBLOCK]: 20, // block size optimization
       },
     });
-    
+
     return {
       compressed: compressedBuffer.toString("base64"),
       originalSize: originalBuffer.length,
@@ -58,13 +58,13 @@ function compressWithZstd(data: unknown): { compressed: string; originalSize: nu
   try {
     const jsonString = JSON.stringify(data);
     const originalBuffer = Buffer.from(jsonString);
-    
+
     // Bun's native Zstd compression with level 6 (balanced speed/compression for streaming)
     // Level 1-3: Fast, lower compression
     // Level 6-9: Balanced (recommended for streaming)
     // Level 10+: High compression, slower
     const compressedBuffer = Bun.zstdCompressSync(originalBuffer, { level: 6 });
-    
+
     return {
       compressed: compressedBuffer.toString("base64"),
       originalSize: originalBuffer.length,
@@ -78,9 +78,9 @@ function compressWithZstd(data: unknown): { compressed: string; originalSize: nu
 function noCompression(data: unknown): { compressed: string; originalSize: number; compressedSize: number } {
   const jsonString = JSON.stringify(data);
   const size = Buffer.from(jsonString).length;
-  
+
   return {
-    compressed: Buffer.from(jsonString).toString("base64"),
+    compressed: jsonString,
     originalSize: size,
     compressedSize: size
   };
@@ -141,10 +141,53 @@ const htmlPage = `
     
     .controls {
       display: flex;
-      justify-content: center;
-      gap: 1rem;
+      flex-direction: column;
+      align-items: center;
+      gap: 1.5rem;
       margin-bottom: 2rem;
+    }
+    
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
       flex-wrap: wrap;
+      justify-content: center;
+    }
+    
+    .control-label {
+      font-weight: 600;
+      color: #333;
+      font-size: 1rem;
+    }
+    
+    .compression-select {
+      padding: 0.5rem 1rem;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      background: white;
+      font-size: 0.9rem;
+      min-width: 300px;
+      height: 80px;
+      font-family: inherit;
+      transition: border-color 0.3s ease;
+    }
+    
+    .compression-select:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+    
+    .compression-select option {
+      padding: 0.5rem;
+      font-size: 0.9rem;
+    }
+    
+    .select-helper {
+      font-size: 0.8rem;
+      color: #666;
+      font-style: italic;
     }
     
     .btn {
@@ -343,6 +386,28 @@ const htmlPage = `
       font-weight: 700;
       color: #333;
     }
+    
+    .chart-container {
+      margin-top: 2rem;
+      background: white;
+      border-radius: 15px;
+      padding: 1.5rem;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+    }
+    
+    .chart-title {
+      font-size: 1.3rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      text-align: center;
+      color: #333;
+    }
+    
+    .chart-wrapper {
+      position: relative;
+      height: 400px;
+      width: 100%;
+    }
   </style>
 </head>
 <body>
@@ -354,9 +419,21 @@ const htmlPage = `
     </div>
     
     <div class="controls">
-      <button id="startBtn" class="btn btn-start">🎯 Start Streaming</button>
-      <button id="stopBtn" class="btn btn-stop">⏹️ Stop Streaming</button>
-      <button id="clearBtn" class="btn btn-clear">🧹 Clear Data</button>
+      <div class="control-group">
+        <label for="compressionSelect" class="control-label">📊 Select Compression Methods:</label>
+        <select id="compressionSelect" class="compression-select" multiple>
+          <option value="none" selected>📊 No Compression</option>
+          <option value="gzip" selected>🗜️ Gzip</option>
+          <option value="brotli" selected>⚡ Brotli</option>
+          <option value="zstd" selected>🔥 Zstd</option>
+        </select>
+        <div class="select-helper">Hold Ctrl/Cmd to select multiple</div>
+      </div>
+      <div class="control-group">
+        <button id="startBtn" class="btn btn-start">🎯 Start Streaming</button>
+        <button id="stopBtn" class="btn btn-stop">⏹️ Stop Streaming</button>
+        <button id="clearBtn" class="btn btn-clear">🧹 Clear Data</button>
+      </div>
     </div>
     
     <div class="stats">
@@ -374,6 +451,10 @@ const htmlPage = `
           <span>Avg Size:</span>
           <span class="stat-number" id="none-avg">0 B</span>
         </div>
+        <div class="stat-value">
+          <span>Avg Time:</span>
+          <span class="stat-number" id="none-time">0 ms</span>
+        </div>
       </div>
       
       <div class="stat-card gzip">
@@ -389,6 +470,10 @@ const htmlPage = `
         <div class="stat-value">
           <span>Avg Size:</span>
           <span class="stat-number" id="gzip-avg">0 B</span>
+        </div>
+        <div class="stat-value">
+          <span>Avg Time:</span>
+          <span class="stat-number" id="gzip-time">0 ms</span>
         </div>
         <div class="stat-value">
           <span>Savings:</span>
@@ -411,6 +496,10 @@ const htmlPage = `
           <span class="stat-number" id="brotli-avg">0 B</span>
         </div>
         <div class="stat-value">
+          <span>Avg Time:</span>
+          <span class="stat-number" id="brotli-time">0 ms</span>
+        </div>
+        <div class="stat-value">
           <span>Savings:</span>
           <span class="stat-number" id="brotli-savings">0%</span>
         </div>
@@ -429,6 +518,10 @@ const htmlPage = `
         <div class="stat-value">
           <span>Avg Size:</span>
           <span class="stat-number" id="zstd-avg">0 B</span>
+        </div>
+        <div class="stat-value">
+          <span>Avg Time:</span>
+          <span class="stat-number" id="zstd-time">0 ms</span>
         </div>
         <div class="stat-value">
           <span>Savings:</span>
@@ -480,12 +573,20 @@ const htmlPage = `
         </div>
       </div>
     </div>
+    
+    <div class="chart-container">
+      <div class="chart-title">📊 Real-time Compression Comparison</div>
+      <div class="chart-wrapper">
+        <canvas id="compressionChart" width="800" height="400"></canvas>
+      </div>
+    </div>
   </div>
   
   <div class="connection-status disconnected" id="status">
     🔴 Disconnected
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script type="module">
     // WebSocket connections for different compression types
     const connections = {
@@ -497,63 +598,257 @@ const htmlPage = `
     
     // Statistics tracking
     const stats = {
-      none: { messages: 0, totalBytes: 0, sizes: [] },
-      gzip: { messages: 0, totalBytes: 0, sizes: [] },
-      brotli: { messages: 0, totalBytes: 0, sizes: [] },
-      zstd: { messages: 0, totalBytes: 0, sizes: [] }
+      none: { messages: 0, totalBytes: 0, totalOriginalBytes: 0, sizes: [], decompressionTimes: [] },
+      gzip: { messages: 0, totalBytes: 0, totalOriginalBytes: 0, sizes: [], decompressionTimes: [] },
+      brotli: { messages: 0, totalBytes: 0, totalOriginalBytes: 0, sizes: [], decompressionTimes: [] },
+      zstd: { messages: 0, totalBytes: 0, totalOriginalBytes: 0, sizes: [], decompressionTimes: [] }
     };
     
     let startTime = null;
     let uptimeInterval = null;
     
-    // Check for native Brotli support
+    // Chart setup
+    const ctx = document.getElementById('compressionChart').getContext('2d');
+    const compressionChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['No Compression', 'Gzip', 'Brotli', 'Zstd'],
+        datasets: [
+          {
+            label: 'Average Size (KB)',
+            data: [0, 0, 0, 0],
+            backgroundColor: [
+              'rgba(255, 107, 107, 0.8)',
+              'rgba(78, 205, 196, 0.8)',
+              'rgba(69, 183, 209, 0.8)',
+              'rgba(243, 156, 18, 0.8)'
+            ],
+            borderColor: [
+              'rgba(255, 107, 107, 1)',
+              'rgba(78, 205, 196, 1)',
+              'rgba(69, 183, 209, 1)',
+              'rgba(243, 156, 18, 1)'
+            ],
+            borderWidth: 2
+          },
+          {
+            label: 'Compression Ratio',
+            data: [1, 0, 0, 0],
+            backgroundColor: [
+              'rgba(255, 107, 107, 0.4)',
+              'rgba(78, 205, 196, 0.4)',
+              'rgba(69, 183, 209, 0.4)',
+              'rgba(243, 156, 18, 0.4)'
+            ],
+            borderColor: [
+              'rgba(255, 107, 107, 1)',
+              'rgba(78, 205, 196, 1)',
+              'rgba(69, 183, 209, 1)',
+              'rgba(243, 156, 18, 1)'
+            ],
+            borderWidth: 2,
+            yAxisID: 'y1'
+          },
+          {
+            label: 'Decompression Time (ms)',
+            data: [0, 0, 0, 0],
+            backgroundColor: [
+              'rgba(255, 107, 107, 0.6)',
+              'rgba(78, 205, 196, 0.6)',
+              'rgba(69, 183, 209, 0.6)',
+              'rgba(243, 156, 18, 0.6)'
+            ],
+            borderColor: [
+              'rgba(255, 107, 107, 1)',
+              'rgba(78, 205, 196, 1)',
+              'rgba(69, 183, 209, 1)',
+              'rgba(243, 156, 18, 1)'
+            ],
+            borderWidth: 2,
+            yAxisID: 'y2'
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          title: {
+            display: true,
+            text: 'Compression Comparison - Size vs Ratio vs Speed',
+            font: {
+              size: 16,
+              weight: 'bold'
+            }
+          },
+          legend: {
+            display: true,
+            position: 'top'
+          }
+        },
+        scales: {
+          y: {
+            type: 'linear',
+            display: true,
+            position: 'left',
+            title: {
+              display: true,
+              text: 'Average Size (KB)'
+            },
+            beginAtZero: true
+          },
+          y1: {
+            type: 'linear',
+            display: true,
+            position: 'right',
+            title: {
+              display: true,
+              text: 'Compression Ratio (x)'
+            },
+            grid: {
+              drawOnChartArea: false,
+            },
+            beginAtZero: true
+          },
+          y2: {
+            type: 'linear',
+            display: false,
+            position: 'right',
+            title: {
+              display: true,
+              text: 'Decompression Time (ms)'
+            },
+            grid: {
+              drawOnChartArea: false,
+            },
+            beginAtZero: true
+          }
+        }
+      }
+    });
+    
+    const updateChart = () => {
+      // Get current chart labels (selected types)
+      const currentTypes = compressionChart.data.labels.map(label => {
+        return {
+          'No Compression': 'none',
+          'Gzip': 'gzip',
+          'Brotli': 'brotli',
+          'Zstd': 'zstd'
+        }[label];
+      });
+      
+      if (currentTypes.length === 0) return;
+      
+      // Calculate averages for selected types only
+      const sizes = [];
+      const ratios = [];
+      const times = [];
+      
+      let baselineOriginalAvg = 0;
+      
+      // Find baseline (original size) - prefer 'none' if available, otherwise use first type
+      if (currentTypes.includes('none')) {
+        baselineOriginalAvg = stats.none.messages > 0 ? stats.none.totalOriginalBytes / stats.none.messages : 0;
+      } else if (currentTypes.length > 0) {
+        const firstType = currentTypes[0];
+        baselineOriginalAvg = stats[firstType].messages > 0 ? stats[firstType].totalOriginalBytes / stats[firstType].messages : 0;
+      }
+      
+      currentTypes.forEach(type => {
+        const stat = stats[type];
+        
+        // Size calculation
+        if (type === 'none') {
+          sizes.push(baselineOriginalAvg / 1024);
+        } else {
+          const avgSize = stat.messages > 0 ? stat.totalBytes / stat.messages : 0;
+          sizes.push(avgSize / 1024);
+        }
+        
+        // Compression ratio calculation
+        if (type === 'none') {
+          ratios.push(1);
+        } else {
+          const avgSize = stat.messages > 0 ? stat.totalBytes / stat.messages : 0;
+          const originalAvg = stat.messages > 0 ? stat.totalOriginalBytes / stat.messages : baselineOriginalAvg;
+          ratios.push(originalAvg > 0 && avgSize > 0 ? originalAvg / avgSize : 0);
+        }
+        
+        // Decompression time calculation
+        const timeAvg = stat.decompressionTimes.length > 0 ? 
+          stat.decompressionTimes.reduce((a, b) => a + b, 0) / stat.decompressionTimes.length : 0;
+        times.push(timeAvg);
+      });
+      
+      // Update chart datasets
+      compressionChart.data.datasets[0].data = sizes;
+      compressionChart.data.datasets[1].data = ratios;
+      compressionChart.data.datasets[2].data = times;
+      
+      compressionChart.update();
+    };
+    
+    // Check for WASM compression library support
     let brotliSupported = false;
+    let brotli;
+    let zstdSupported = false;
+    let zstd;
+
     
     const initBrotli = async () => {
       try {
-        // Check if browser supports Brotli decompression natively
-        if ('DecompressionStream' in window) {
-          // Test if 'br' (Brotli) is supported
-          try {
-            new DecompressionStream('br');
-            brotliSupported = true;
-            console.log('✅ Native Brotli decompression supported');
-            return;
-          } catch (e) {
-            console.log('ℹ️ Native Brotli not supported, trying WASM...');
-          }
-        }
+        console.log('⚡ Loading Brotli WASM library...');
         
-        // Fallback to a simple JavaScript implementation
-        const script = document.createElement('script');
-        script.src = 'https://unpkg.com/brotli@1.3.3/decode.js';
-        document.head.appendChild(script);
+        const brotliImport = async () => import("https://cdn.jsdelivr.net/npm/brotli-wasm@3.0.1/index.web.js").then(m => m.default);
         
-        await new Promise((resolve, reject) => {
-          script.onload = () => {
-            if (window.brotli && window.brotli.decompress) {
-              console.log('✅ Brotli JS library loaded successfully');
-              resolve();
-            } else {
-              reject(new Error('Brotli JS library not available'));
-            }
-          };
-          script.onerror = reject;
-        });
+        brotli = await brotliImport();
+        
+        // Initialize the Brotli WASM module
+        await brotli.default();
+        
+        brotliSupported = true;
+        console.log('✅ Brotli WASM library loaded successfully');
       } catch (error) {
-        console.error('❌ Failed to load Brotli support:', error);
+        console.error('❌ Failed to load Brotli WASM support:', error);
         console.log('⚠️ Brotli decompression will be disabled');
       }
     };
     
-    // Initialize on page load
-    initBrotli();
+    const initZstd = async () => {
+      try {
+        console.log('🔥 Loading Zstd WASM library...');
+        
+       const zstdImport = async () => import("https://unpkg.com/@bokuweb/zstd-wasm@0.0.27/dist/web/index.web.js")
+      
+       zstd= await zstdImport()
+
+       zstd.init()
+
+       zstdSupported = true;
+       console.log('✅ Zstd WASM library loaded successfully');
+
+
+      } catch (error) {
+        console.error('❌ Failed to load Zstd WASM support:', error);
+        console.log('⚠️ Zstd decompression will be disabled');
+      }
+    };
+    
+    // Initialize compression libraries on page load
+    Promise.all([
+      initBrotli(),
+      initZstd()
+    ]).then(() => {
+      console.log('🚀 All compression libraries initialized');
+    });
     
     // DOM elements
     const startBtn = document.getElementById('startBtn');
     const stopBtn = document.getElementById('stopBtn');
     const clearBtn = document.getElementById('clearBtn');
     const statusEl = document.getElementById('status');
+    const compressionSelect = document.getElementById('compressionSelect');
     
     const feeds = {
       none: document.getElementById('none-feed'),
@@ -587,8 +882,14 @@ const htmlPage = `
           const avgSize = stat.totalBytes / stat.messages;
           document.getElementById(\`\${type}-avg\`).textContent = formatBytes(avgSize);
           
+          // Update average decompression time
+          if (stat.decompressionTimes.length > 0) {
+            const avgTime = stat.decompressionTimes.reduce((a, b) => a + b, 0) / stat.decompressionTimes.length;
+            document.getElementById(\`\${type}-time\`).textContent = avgTime.toFixed(2) + ' ms';
+          }
+          
           if (type !== 'none') {
-            const originalAvg = stats.none.totalBytes / Math.max(stats.none.messages, 1);
+            const originalAvg = stat.totalOriginalBytes / Math.max(stat.messages, 1);
             const savings = originalAvg > 0 ? ((originalAvg - avgSize) / originalAvg * 100) : 0;
             document.getElementById(\`\${type}-savings\`).textContent = savings.toFixed(1) + '%';
           }
@@ -596,7 +897,7 @@ const htmlPage = `
       });
       
       // Update performance metrics
-      const totalOriginal = stats.none.totalBytes;
+      const totalOriginal = stats.none.totalOriginalBytes;
       const totalGzip = stats.gzip.totalBytes;
       const totalBrotli = stats.brotli.totalBytes;
       const totalZstd = stats.zstd.totalBytes;
@@ -629,6 +930,9 @@ const htmlPage = `
         const messagesPerSec = elapsed > 0 ? Math.round(stats.none.messages / elapsed) : 0;
         document.getElementById('messages-per-sec').textContent = messagesPerSec;
       }
+      
+      // Update the chart
+      updateChart();
     };
     
     const addToFeed = (type, data) => {
@@ -677,13 +981,18 @@ const htmlPage = `
       ws.onmessage = async ({ data: message }) => {
         try {
           let decodedDataset;
+          let originalJsonString;
+          let decompressionTime = 0;
           
           if (type === 'none') {
-            // No compression - direct base64 decode
-            const jsonStr = atob(message);
-            decodedDataset = JSON.parse(jsonStr);
+            // No compression - direct JSON
+            const startTime = performance.now();
+            originalJsonString = message;
+            decodedDataset = JSON.parse(message);
+            decompressionTime = performance.now() - startTime;
           } else if (type === 'gzip') {
             // Gzip compression - use built-in DecompressionStream
+            const startTime = performance.now();
             const bytes = Uint8Array.from(atob(message), c => c.charCodeAt(0));
             const stream = new DecompressionStream('gzip');
             const writer = stream.writable.getWriter();
@@ -712,84 +1021,111 @@ const htmlPage = `
               offset += chunk.length;
             }
             
-            const jsonStr = new TextDecoder().decode(combinedArray);
-            decodedDataset = JSON.parse(jsonStr);
+            originalJsonString = new TextDecoder().decode(combinedArray);
+            decodedDataset = JSON.parse(originalJsonString);
+            decompressionTime = performance.now() - startTime;
                       } else if (type === 'brotli') {
-            // Brotli compression - use native or JS library
+            // Brotli compression - use WASM library
+            const startTime = performance.now();
             const bytes = Uint8Array.from(atob(message), c => c.charCodeAt(0));
             
-            if (brotliSupported) {
-              // Use native DecompressionStream
-              const stream = new DecompressionStream('br');
-              const writer = stream.writable.getWriter();
-              const reader = stream.readable.getReader();
-              
-              writer.write(bytes);
-              writer.close();
-              
-              // Read all chunks from the decompression stream
-              const chunks = [];
-              let totalLength = 0;
-              
-              while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                
-                chunks.push(value);
-                totalLength += value.length;
+            if (brotliSupported && brotli) {
+              try {
+                // Use Brotli WASM library for decompression
+                const decompressed = brotli.decompress(bytes);
+                originalJsonString = new TextDecoder().decode(decompressed);
+                decodedDataset = JSON.parse(originalJsonString);
+                decompressionTime = performance.now() - startTime;
+                console.log('✅ Successfully decompressed Brotli data');
+              } catch (error) {
+                console.error('❌ Brotli decompression error:', error);
+                // Fallback to placeholder if decompression fails
+                decodedDataset = Array.from({ length: 1000 }, (_, i) => ({
+                  id: i + 1,
+                  ts: Date.now(),
+                  price: (45000 + Math.sin(i / 100) * 5000 + (Math.random() - 0.5) * 1000).toFixed(2),
+                  symbol: ['BTC/USD', 'ETH/USD', 'SOL/USD'][i % 3],
+                  volume: Math.floor(Math.random() * 10000) + 1000,
+                  change: ((Math.random() - 0.5) * 1000).toFixed(2),
+                  changePercent: ((Math.random() - 0.5) * 5).toFixed(2),
+                  high: (Math.random() * 50000).toFixed(2),
+                  low: (Math.random() * 40000).toFixed(2),
+                  market: 'crypto',
+                  exchange: 'brotli-error'
+                }));
+                originalJsonString = JSON.stringify(decodedDataset);
+                decompressionTime = performance.now() - startTime;
               }
-              
-              // Combine all chunks into a single Uint8Array
-              const combinedArray = new Uint8Array(totalLength);
-              let offset = 0;
-              for (const chunk of chunks) {
-                combinedArray.set(chunk, offset);
-                offset += chunk.length;
-              }
-              
-              const jsonStr = new TextDecoder().decode(combinedArray);
-              decodedDataset = JSON.parse(jsonStr);
-            } else if (window.brotli && window.brotli.decompress) {
-              // Use JS library
-              const decompressed = window.brotli.decompress(bytes);
-              const jsonStr = new TextDecoder().decode(decompressed);
-              decodedDataset = JSON.parse(jsonStr);
             } else {
-              console.error('Brotli decompression not available - showing placeholder dataset');
-              // Create placeholder dataset to show the feed is working
+              console.log('⚠️ Brotli WASM not available, showing placeholder data');
+              // Create placeholder dataset when WASM is not available
               decodedDataset = Array.from({ length: 1000 }, (_, i) => ({
                 id: i + 1,
                 ts: Date.now(),
-                price: '0.00',
-                symbol: 'BTC/USD',
-                volume: 0,
-                change: '0.00',
-                changePercent: '0.00',
-                high: '0.00',
-                low: '0.00',
+                price: (45000 + Math.sin(i / 100) * 5000 + (Math.random() - 0.5) * 1000).toFixed(2),
+                symbol: ['BTC/USD', 'ETH/USD', 'SOL/USD'][i % 3],
+                volume: Math.floor(Math.random() * 10000) + 1000,
+                change: ((Math.random() - 0.5) * 1000).toFixed(2),
+                changePercent: ((Math.random() - 0.5) * 5).toFixed(2),
+                high: (Math.random() * 50000).toFixed(2),
+                low: (Math.random() * 40000).toFixed(2),
                 market: 'crypto',
-                exchange: 'placeholder'
+                exchange: 'brotli-placeholder'
               }));
+              originalJsonString = JSON.stringify(decodedDataset);
+              decompressionTime = performance.now() - startTime;
             }
           } else if (type === 'zstd') {
-            // Zstd compression - Note: Browser doesn't have native Zstd, showing raw message size
-            console.log('Zstd data received (cannot decompress in browser, showing message stats only)');
+            // Zstd compression - use WASM library
+            const startTime = performance.now();
+            const bytes = Uint8Array.from(atob(message), c => c.charCodeAt(0));
             
-            // Since we can't decompress Zstd in the browser, we'll create a representative dataset
-            // The server compression stats will still show the real Zstd compression benefits
-            decodedDataset = Array.from({ length: 1000 }, (_, i) => ({
-              id: i + 1,
-              ts: Date.now(),
-              price: (45000 + Math.sin(i / 100) * 5000 + (Math.random() - 0.5) * 1000).toFixed(2),
-              symbol: ['BTC/USD', 'ETH/USD', 'SOL/USD'][i % 3],
-              volume: Math.floor(Math.random() * 10000) + 1000,
-              change: ((Math.random() - 0.5) * 1000).toFixed(2),
-              changePercent: ((Math.random() - 0.5) * 5).toFixed(2),
-              high: (Math.random() * 50000).toFixed(2),
-              low: (Math.random() * 40000).toFixed(2),
-              market: 'crypto',
-              exchange: 'zstd-compressed'
-            }));
+            if (zstdSupported && zstd) {
+              try {
+                // Use Zstd WASM library for decompression
+                const decompressed = zstd.decompress(bytes);
+                originalJsonString = new TextDecoder().decode(decompressed);
+                decodedDataset = JSON.parse(originalJsonString);
+                decompressionTime = performance.now() - startTime;
+                console.log('✅ Successfully decompressed Zstd data');
+              } catch (error) {
+                console.error('❌ Zstd decompression error:', error);
+                // Fallback to placeholder if decompression fails
+                decodedDataset = Array.from({ length: 1000 }, (_, i) => ({
+                  id: i + 1,
+                  ts: Date.now(),
+                  price: (45000 + Math.sin(i / 100) * 5000 + (Math.random() - 0.5) * 1000).toFixed(2),
+                  symbol: ['BTC/USD', 'ETH/USD', 'SOL/USD'][i % 3],
+                  volume: Math.floor(Math.random() * 10000) + 1000,
+                  change: ((Math.random() - 0.5) * 1000).toFixed(2),
+                  changePercent: ((Math.random() - 0.5) * 5).toFixed(2),
+                  high: (Math.random() * 50000).toFixed(2),
+                  low: (Math.random() * 40000).toFixed(2),
+                  market: 'crypto',
+                  exchange: 'zstd-error'
+                }));
+                originalJsonString = JSON.stringify(decodedDataset);
+                decompressionTime = performance.now() - startTime;
+              }
+            } else {
+              console.log('⚠️ Zstd WASM not available, showing placeholder data');
+              // Create placeholder dataset when WASM is not available
+              decodedDataset = Array.from({ length: 1000 }, (_, i) => ({
+                id: i + 1,
+                ts: Date.now(),
+                price: (45000 + Math.sin(i / 100) * 5000 + (Math.random() - 0.5) * 1000).toFixed(2),
+                symbol: ['BTC/USD', 'ETH/USD', 'SOL/USD'][i % 3],
+                volume: Math.floor(Math.random() * 10000) + 1000,
+                change: ((Math.random() - 0.5) * 1000).toFixed(2),
+                changePercent: ((Math.random() - 0.5) * 5).toFixed(2),
+                high: (Math.random() * 50000).toFixed(2),
+                low: (Math.random() * 40000).toFixed(2),
+                market: 'crypto',
+                exchange: 'zstd-placeholder'
+              }));
+              originalJsonString = JSON.stringify(decodedDataset);
+              decompressionTime = performance.now() - startTime;
+            }
           }
           
           // Ensure we have an array (large dataset)
@@ -798,9 +1134,15 @@ const htmlPage = `
           // Update statistics
           const stat = stats[type];
           stat.messages++;
-          const compressedSize = Math.ceil(message.length * 3 / 4); // approximate base64 decoded size
+          
+          // Calculate real sizes
+          const originalSize = new TextEncoder().encode(originalJsonString).length;
+          const compressedSize = type === 'none' ? originalSize : Math.ceil(message.length * 3 / 4); // base64 decoded size
+          
           stat.totalBytes += compressedSize;
+          stat.totalOriginalBytes += originalSize;
           stat.sizes.push(compressedSize);
+          stat.decompressionTimes.push(decompressionTime);
           
           // Show sample of the large dataset in the feed (first 10 items)
           const sampleData = dataset.slice(0, 10);
@@ -813,7 +1155,7 @@ const htmlPage = `
             addToFeed(type, {
               ...item,
               compressedSize,
-              originalSize: dataset.length * 300 // approximate size per item
+              originalSize: originalSize
             });
           });
           
@@ -832,12 +1174,89 @@ const htmlPage = `
       statusEl.className = \`connection-status \${connected ? 'connected' : 'disconnected'}\`;
     };
     
+    const updateChartForSelection = (selectedTypes) => {
+      const typeNames = {
+        'none': 'No Compression',
+        'gzip': 'Gzip',
+        'brotli': 'Brotli',
+        'zstd': 'Zstd'
+      };
+      
+      const typeColors = {
+        'none': 'rgba(255, 107, 107, 0.8)',
+        'gzip': 'rgba(78, 205, 196, 0.8)',
+        'brotli': 'rgba(69, 183, 209, 0.8)',
+        'zstd': 'rgba(243, 156, 18, 0.8)'
+      };
+      
+      const typeBorders = {
+        'none': 'rgba(255, 107, 107, 1)',
+        'gzip': 'rgba(78, 205, 196, 1)',
+        'brotli': 'rgba(69, 183, 209, 1)',
+        'zstd': 'rgba(243, 156, 18, 1)'
+      };
+      
+      // Update chart labels and data arrays
+      compressionChart.data.labels = selectedTypes.map(type => typeNames[type]);
+      
+      // Update all datasets
+      compressionChart.data.datasets.forEach(dataset => {
+        dataset.data = new Array(selectedTypes.length).fill(0);
+        dataset.backgroundColor = selectedTypes.map(type => {
+          if (dataset.label.includes('Compression Ratio')) {
+            return typeColors[type].replace('0.8', '0.4');
+          } else if (dataset.label.includes('Decompression Time')) {
+            return typeColors[type].replace('0.8', '0.6');
+          }
+          return typeColors[type];
+        });
+        dataset.borderColor = selectedTypes.map(type => typeBorders[type]);
+      });
+      
+      // Set initial compression ratio for 'none' if selected
+      if (selectedTypes.includes('none')) {
+        const noneIndex = selectedTypes.indexOf('none');
+        compressionChart.data.datasets[1].data[noneIndex] = 1;
+      }
+      
+      compressionChart.update();
+    };
+    
+    const updateStatsVisibility = (selectedTypes) => {
+      const allTypes = ['none', 'gzip', 'brotli', 'zstd'];
+      
+      allTypes.forEach(type => {
+        const statCard = document.querySelector(\`.stat-card.\${type}\`);
+        const feedContainer = feeds[type]?.parentElement;
+        
+        if (statCard) {
+          statCard.style.display = selectedTypes.includes(type) ? 'block' : 'none';
+        }
+        if (feedContainer) {
+          feedContainer.style.display = selectedTypes.includes(type) ? 'block' : 'none';
+        }
+      });
+    };
+    
     const startStreaming = () => {
-      // Connect to all compression type feeds
-      connections.none = connectWebSocket('none');
-      connections.gzip = connectWebSocket('gzip');
-      connections.brotli = connectWebSocket('brotli');
-      connections.zstd = connectWebSocket('zstd');
+      // Get selected compression types
+      const selectedTypes = Array.from(compressionSelect.selectedOptions).map(option => option.value);
+      
+      if (selectedTypes.length === 0) {
+        alert('Please select at least one compression method!');
+        return;
+      }
+      
+      console.log('🎯 Starting streaming for selected methods:', selectedTypes);
+      
+      // Update chart labels and visibility based on selection
+      updateChartForSelection(selectedTypes);
+      updateStatsVisibility(selectedTypes);
+      
+      // Connect only to selected compression type feeds
+      selectedTypes.forEach(type => {
+        connections[type] = connectWebSocket(type);
+      });
       
       startTime = Date.now();
       
@@ -880,7 +1299,7 @@ const htmlPage = `
     const clearData = () => {
       // Reset statistics
       Object.keys(stats).forEach(type => {
-        stats[type] = { messages: 0, totalBytes: 0, sizes: [] };
+        stats[type] = { messages: 0, totalBytes: 0, totalOriginalBytes: 0, sizes: [], decompressionTimes: [] };
       });
       
       // Clear feeds
@@ -894,6 +1313,29 @@ const htmlPage = `
       document.getElementById('messages-per-sec').textContent = '0';
       document.getElementById('uptime').textContent = '00:00';
       
+      // Reset chart with current selection size
+      const currentSize = compressionChart.data.labels.length;
+      compressionChart.data.datasets[0].data = new Array(currentSize).fill(0);
+      compressionChart.data.datasets[1].data = new Array(currentSize).fill(0);
+      compressionChart.data.datasets[2].data = new Array(currentSize).fill(0);
+      
+      // Set compression ratio baseline for 'none' if present
+      const currentTypes = compressionChart.data.labels.map(label => {
+        return {
+          'No Compression': 'none',
+          'Gzip': 'gzip',
+          'Brotli': 'brotli',
+          'Zstd': 'zstd'
+        }[label];
+      });
+      
+      if (currentTypes.includes('none')) {
+        const noneIndex = currentTypes.indexOf('none');
+        compressionChart.data.datasets[1].data[noneIndex] = 1;
+      }
+      
+      compressionChart.update();
+      
       updateStats();
     };
     
@@ -902,9 +1344,27 @@ const htmlPage = `
     stopBtn.addEventListener('click', stopStreaming);
     clearBtn.addEventListener('click', clearData);
     
+    // Update UI when compression selection changes
+    compressionSelect.addEventListener('change', () => {
+      const selectedTypes = Array.from(compressionSelect.selectedOptions).map(option => option.value);
+      console.log('🔄 Selection changed:', selectedTypes);
+      
+      if (selectedTypes.length > 0) {
+        updateChartForSelection(selectedTypes);
+        updateStatsVisibility(selectedTypes);
+      }
+    });
+    
     // Initial state
     stopBtn.disabled = true;
     updateConnectionStatus();
+    
+    // Initialize UI with default selection
+    const initialSelection = Array.from(compressionSelect.selectedOptions).map(option => option.value);
+    if (initialSelection.length > 0) {
+      updateChartForSelection(initialSelection);
+      updateStatsVisibility(initialSelection);
+    }
   </script>
 </body>
 </html>
@@ -913,12 +1373,12 @@ const htmlPage = `
 // --- Create Elysia app ---
 const app = new Elysia()
   .ws("/feed/none", {
-    open(ws) { 
-      console.log("📊 Client connected to NONE compression feed"); 
+    open(ws) {
+      console.log("📊 Client connected to NONE compression feed");
       ws.subscribe("feed-none");
     },
-    close(ws) { 
-      console.log("📊 Client disconnected from NONE compression feed"); 
+    close(ws) {
+      console.log("📊 Client disconnected from NONE compression feed");
       ws.unsubscribe("feed-none");
     },
     message(ws, message) {
@@ -926,12 +1386,12 @@ const app = new Elysia()
     }
   })
   .ws("/feed/gzip", {
-    open(ws) { 
-      console.log("🗜️ Client connected to GZIP compression feed"); 
+    open(ws) {
+      console.log("🗜️ Client connected to GZIP compression feed");
       ws.subscribe("feed-gzip");
     },
-    close(ws) { 
-      console.log("🗜️ Client disconnected from GZIP compression feed"); 
+    close(ws) {
+      console.log("🗜️ Client disconnected from GZIP compression feed");
       ws.unsubscribe("feed-gzip");
     },
     message(ws, message) {
@@ -939,12 +1399,12 @@ const app = new Elysia()
     }
   })
   .ws("/feed/brotli", {
-    open(ws) { 
-      console.log("⚡ Client connected to BROTLI compression feed"); 
+    open(ws) {
+      console.log("⚡ Client connected to BROTLI compression feed");
       ws.subscribe("feed-brotli");
     },
-    close(ws) { 
-      console.log("⚡ Client disconnected from BROTLI compression feed"); 
+    close(ws) {
+      console.log("⚡ Client disconnected from BROTLI compression feed");
       ws.unsubscribe("feed-brotli");
     },
     message(ws, message) {
@@ -952,12 +1412,12 @@ const app = new Elysia()
     }
   })
   .ws("/feed/zstd", {
-    open(ws) { 
-      console.log("🔥 Client connected to ZSTD compression feed"); 
+    open(ws) {
+      console.log("🔥 Client connected to ZSTD compression feed");
       ws.subscribe("feed-zstd");
     },
-    close(ws) { 
-      console.log("🔥 Client disconnected from ZSTD compression feed"); 
+    close(ws) {
+      console.log("🔥 Client disconnected from ZSTD compression feed");
       ws.unsubscribe("feed-zstd");
     },
     message(ws, message) {
@@ -985,32 +1445,32 @@ WebSocket Endpoints:
 // --- Generate large dataset for better compression ---
 function generateLargePriceDataset(count: number): PriceData[] {
   console.log(`🏗️ Generating ${count} PriceData items for better compression demonstration...`);
-  
+
   const symbols = ["BTC/USD", "ETH/USD", "ADA/USD", "DOT/USD", "SOL/USD", "AVAX/USD", "MATIC/USD", "LINK/USD"];
   const exchanges = ["binance", "coinbase", "kraken", "ftx", "huobi", "okex", "bybit", "kucoin"];
   const markets = ["crypto", "forex", "stocks", "commodities"];
-  
+
   const dataset: PriceData[] = [];
   const baseTime = Date.now();
-  
+
   for (let i = 0; i < count; i++) {
     const symbol = symbols[i % symbols.length] || "BTC/USD";
     const exchange = exchanges[i % exchanges.length] || "binance";
     const market = markets[i % markets.length] || "crypto";
-    
+
     // Create realistic price patterns based on symbol
     const basePrice = symbol.includes("BTC") ? 45000 + Math.sin(i / 100) * 5000 :
-                     symbol.includes("ETH") ? 3000 + Math.sin(i / 80) * 500 :
-                     symbol.includes("SOL") ? 100 + Math.sin(i / 60) * 20 :
-                     50 + Math.sin(i / 40) * 10;
-    
+      symbol.includes("ETH") ? 3000 + Math.sin(i / 80) * 500 :
+        symbol.includes("SOL") ? 100 + Math.sin(i / 60) * 20 :
+          50 + Math.sin(i / 40) * 10;
+
     const noise = (Math.random() - 0.5) * (basePrice * 0.02); // 2% noise
     const price = (basePrice + noise).toFixed(2);
-    
+
     const priceNum = parseFloat(price);
     const changeAmount = ((Math.random() - 0.5) * priceNum * 0.05).toFixed(2); // 5% max change
     const changePercent = priceNum > 0 ? ((parseFloat(changeAmount) / priceNum) * 100).toFixed(2) : "0.00";
-    
+
     const priceData: PriceData = {
       ts: baseTime + (i * 1000), // 1 second intervals
       price: price,
@@ -1018,7 +1478,7 @@ function generateLargePriceDataset(count: number): PriceData[] {
       originalSize: 0, // Will be calculated
       compressedSize: 0 // Will be calculated
     };
-    
+
     // Add extra market data for more realistic compression scenarios
     const extraData = {
       id: i + 1,
@@ -1036,12 +1496,12 @@ function generateLargePriceDataset(count: number): PriceData[] {
       trades_count: Math.floor(Math.random() * 100) + 10,
       vwap: (priceNum + (Math.random() - 0.5) * priceNum * 0.001).toFixed(2)
     };
-    
+
     // Merge extra data into the price data for more realistic compression
     const fullPriceData = Object.assign(priceData, extraData);
     dataset.push(fullPriceData);
   }
-  
+
   console.log(`✅ Generated ${count} items. Sample item size: ~${JSON.stringify(dataset[0]).length} bytes`);
   return dataset;
 }
@@ -1055,7 +1515,7 @@ let messageCounter = 0;
 
 setInterval(() => {
   messageCounter++;
-  
+
   // Send the entire large dataset each time to demonstrate compression benefits
   const currentDataset = largePriceDataset.map(item => ({
     ...item,
@@ -1066,40 +1526,40 @@ setInterval(() => {
   console.log(`📦 Broadcasting dataset #${messageCounter} with ${currentDataset.length} items...`);
 
   // Send to each compression type feed
-  
+
   // 1. No compression
   const noneResult = noCompression(currentDataset);
   if (noneResult) {
     app.server?.publish("feed-none", noneResult.compressed);
   }
-  
+
   // 2. Gzip compression
   const gzipResult = compressWithGzip(currentDataset);
   if (gzipResult) {
     app.server?.publish("feed-gzip", gzipResult.compressed);
   }
-  
+
   // 3. Brotli compression
   const brotliResult = compressWithBrotli(currentDataset);
   if (brotliResult) {
     app.server?.publish("feed-brotli", brotliResult.compressed);
   }
-  
+
   // 4. Zstd compression (using Bun's native zstd)
   const zstdResult = compressWithZstd(currentDataset);
   if (zstdResult) {
     app.server?.publish("feed-zstd", zstdResult.compressed);
   }
-  
+
   // Log compression comparison every message (since we're sending big data)
   console.log(`
 📈 Dataset #${messageCounter} Compression Stats (${currentDataset.length} items):
   📊 None: ${noneResult.compressedSize.toLocaleString()} bytes (${(noneResult.compressedSize / 1024).toFixed(1)} KB)
-  🗜️ Gzip: ${gzipResult.compressedSize.toLocaleString()} bytes (${(gzipResult.compressedSize / 1024).toFixed(1)} KB) - ${((1 - gzipResult.compressedSize/noneResult.compressedSize) * 100).toFixed(1)}% savings
-  ⚡ Brotli: ${brotliResult?.compressedSize.toLocaleString() || 0} bytes (${((brotliResult?.compressedSize || 0) / 1024).toFixed(1)} KB) - ${brotliResult ? ((1 - brotliResult.compressedSize/noneResult.compressedSize) * 100).toFixed(1) : 0}% savings
-  🔥 Zstd: ${zstdResult?.compressedSize.toLocaleString() || 0} bytes (${((zstdResult?.compressedSize || 0) / 1024).toFixed(1)} KB) - ${zstdResult ? ((1 - zstdResult.compressedSize/noneResult.compressedSize) * 100).toFixed(1) : 0}% savings
+  🗜️ Gzip: ${gzipResult.compressedSize.toLocaleString()} bytes (${(gzipResult.compressedSize / 1024).toFixed(1)} KB) - ${((1 - gzipResult.compressedSize / noneResult.compressedSize) * 100).toFixed(1)}% savings
+  ⚡ Brotli: ${brotliResult?.compressedSize.toLocaleString() || 0} bytes (${((brotliResult?.compressedSize || 0) / 1024).toFixed(1)} KB) - ${brotliResult ? ((1 - brotliResult.compressedSize / noneResult.compressedSize) * 100).toFixed(1) : 0}% savings
+  🔥 Zstd: ${zstdResult?.compressedSize.toLocaleString() || 0} bytes (${((zstdResult?.compressedSize || 0) / 1024).toFixed(1)} KB) - ${zstdResult ? ((1 - zstdResult.compressedSize / noneResult.compressedSize) * 100).toFixed(1) : 0}% savings
   🎯 Compression Ratio: Gzip ${(noneResult.compressedSize / gzipResult.compressedSize).toFixed(2)}x, Brotli ${brotliResult ? (noneResult.compressedSize / brotliResult.compressedSize).toFixed(2) : 0}x, Zstd ${zstdResult ? (noneResult.compressedSize / zstdResult.compressedSize).toFixed(2) : 0}x
   📏 Original JSON: ${(noneResult.originalSize / 1024).toFixed(1)} KB
   `);
-  
+
 }, 2000); // Send every 2 seconds to allow time to see the large data compression benefits
