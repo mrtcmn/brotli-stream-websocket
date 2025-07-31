@@ -1,6 +1,6 @@
 # 🚀 WebSocket Compression Comparison
 
-A real-time WebSocket streaming application that compares **Zstd**, **Brotli**, **Gzip**, and **No Compression** for high-frequency data transmission. Built with **Bun** and **Elysia** based on the article "How to Stream Big Data Fast with Compression & WebSockets".
+A real-time WebSocket streaming application that compares **Zstd**, **Brotli**, **Gzip**, and **No Compression** for high-frequency data transmission. Built with **Bun** and **Elysia** based on the article.
 
 ## 🎯 Features
 
@@ -204,20 +204,6 @@ The application includes built-in performance metrics:
 - **Best compression** method identification
 - **Total data saved** across all methods
 
-## 🏆 Article Implementation
-
-This project is an enhanced implementation of the concepts from:
-**"How to Stream Big Data Fast with Compression & WebSockets"**
-
-### Key Enhancements:
-- ✅ **Four compression methods** including modern Zstd
-- ✅ **Side-by-side comparison** of all compression types
-- ✅ **Large dataset streaming** (1000 items per message)
-- ✅ **Real-time statistics** and visual feedback
-- ✅ **Production-ready code** with error handling
-- ✅ **Modern UI** with responsive design and selectable comparisons
-- ✅ **WebAssembly support** for client-side decompression
-- ✅ **Comprehensive documentation** and usage examples
 
 ## 🤝 Contributing
 
@@ -229,7 +215,6 @@ MIT License - see LICENSE file for details.
 
 ## 🙏 Acknowledgments
 
-- Article: "How to Stream Big Data Fast with Compression & WebSockets"
 - [Bun](https://bun.sh) - JavaScript runtime and toolkit
 - [Elysia](https://elysiajs.com) - Ergonomic web framework
 - [brotli-wasm](https://github.com/foliojs/brotli.js) - WebAssembly Brotli implementation
